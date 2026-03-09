@@ -446,6 +446,18 @@ export const DEMOS: DemoMeta[] = [
     needsMultipleTabs: false,
     component: lazy(() => import('@/demos/section7-cuttingedge/KaleidoscopeWebcam')),
   },
+  {
+    id: 'collab-shader-lab',
+    title: 'Collaborative Shader Lab (FaceMesh)',
+    path: '/demos/collab-shader-lab',
+    section: 'cuttingedge',
+    difficulty: 'advanced',
+    description: 'A WebGL shader driven by MediaPipe FaceMesh — 6 filters: eye beams, face center, mouth ripple, head tilt, smile mood.',
+    tags: ['FaceMesh', 'WebGL', 'shader', 'TensorFlow.js', 'facial landmarks'],
+    needsServer: false,
+    needsMultipleTabs: false,
+    component: lazy(() => import('@/demos/section7-cuttingedge/CollabShaderLab')),
+  },
 
   // Section 8 — Fun & Games
   {
