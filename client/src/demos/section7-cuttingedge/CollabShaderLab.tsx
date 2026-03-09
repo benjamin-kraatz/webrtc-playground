@@ -508,6 +508,141 @@ void main() {
   gl_FragColor = vec4(col.rgb, 1.0);
 }`,
   },
+  {
+    name: "Laser Visor",
+    emoji: "🔻",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_nose;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+float lineGlow(vec2 uv, vec2 a, vec2 b, float width) {
+  vec2 pa = uv - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return smoothstep(width, 0.0, length(pa - ba * h));
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec4 webcam = texture2D(u_tex, uv);
+  vec2 eyeL = mix(vec2(0.35, 0.42), u_eye_l, u_face_detected);
+  vec2 eyeR = mix(vec2(0.65, 0.42), u_eye_r, u_face_detected);
+  vec2 nose = mix(vec2(0.50, 0.55), u_nose, u_face_detected);
+  vec2 visorMid = mix(eyeL, eyeR, 0.5);
+  float visorBand = smoothstep(0.12, 0.02, abs(uv.y - visorMid.y));
+  float sweep = smoothstep(0.05, 0.0, abs(uv.x - fract(u_time * 0.22)));
+  vec2 beamLTarget = vec2(-0.25, eyeL.y + 0.03 * sin(u_time * 3.0));
+  vec2 beamRTarget = vec2(1.25, eyeR.y - 0.03 * sin(u_time * 3.0));
+  float beamL = lineGlow(uv, eyeL, beamLTarget, 0.025);
+  float beamR = lineGlow(uv, eyeR, beamRTarget, 0.025);
+  float eyeLCore = smoothstep(0.12, 0.0, distance(uv, eyeL));
+  float eyeRCore = smoothstep(0.12, 0.0, distance(uv, eyeR));
+  float reticleRing = smoothstep(0.025, 0.004, abs(distance(uv, nose) - 0.055));
+  float reticleCross = smoothstep(0.012, 0.0, abs(uv.x - nose.x))
+                     * smoothstep(0.09, 0.0, abs(uv.y - nose.y))
+                     + smoothstep(0.012, 0.0, abs(uv.y - nose.y))
+                     * smoothstep(0.09, 0.0, abs(uv.x - nose.x));
+  vec3 base = webcam.rgb * vec3(0.16, 0.2, 0.26);
+  vec3 visor = vec3(0.05, 0.95, 1.0) * visorBand * (0.35 + sweep * 0.95);
+  vec3 beam = vec3(1.0, 0.15, 0.2) * (beamL + beamR) * (0.85 + 0.15 * sin(u_time * 12.0));
+  vec3 eyeGlow = vec3(1.0, 0.25, 0.3) * (eyeLCore + eyeRCore);
+  vec3 reticle = vec3(0.95, 0.9, 0.2) * (reticleRing + reticleCross * 0.55);
+  gl_FragColor = vec4(base + visor + beam + eyeGlow + reticle, 1.0);
+}`,
+  },
+  {
+    name: "Mouth Portal",
+    emoji: "🌀",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_mouth;
+uniform float u_face_w;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+void main() {
+  vec2 uv = v_uv;
+  vec2 mouth = mix(vec2(0.50, 0.67), u_mouth, u_face_detected);
+  vec2 eyeL = mix(vec2(0.35, 0.42), u_eye_l, u_face_detected);
+  vec2 eyeR = mix(vec2(0.65, 0.42), u_eye_r, u_face_detected);
+  float faceW = mix(0.30, u_face_w, u_face_detected);
+  vec2 delta = uv - mouth;
+  float r = length(delta);
+  float swirl = atan(delta.y, delta.x) + u_time * 1.8 + 0.12 / (r + 0.05);
+  vec2 warped = mouth + vec2(cos(swirl), sin(swirl)) * r;
+  warped += normalize(delta + vec2(0.0001)) * (0.08 / (1.0 + r * 18.0));
+  vec3 portalBase = texture2D(u_tex, clamp(warped, 0.0, 1.0)).rgb;
+  float ringA = smoothstep(faceW * 0.10, faceW * 0.02, abs(r - faceW * 0.15));
+  float ringB = smoothstep(faceW * 0.08, faceW * 0.02, abs(r - faceW * 0.24));
+  float spiral = 0.5 + 0.5 * sin(18.0 * r - u_time * 7.0 + atan(delta.y, delta.x) * 5.0);
+  float mouthCore = smoothstep(faceW * 0.22, 0.0, r);
+  float eyeShock = smoothstep(faceW * 0.13, 0.0, distance(uv, eyeL))
+                  + smoothstep(faceW * 0.13, 0.0, distance(uv, eyeR));
+  vec3 abyss = mix(vec3(0.02, 0.0, 0.05), vec3(0.35, 0.0, 0.65), spiral);
+  vec3 glow = vec3(0.0, 0.95, 1.0) * ringA + vec3(1.0, 0.0, 0.7) * ringB;
+  vec3 col = mix(portalBase * 0.22, abyss, mouthCore * 0.85);
+  col += glow * (0.55 + 0.45 * sin(u_time * 4.0));
+  col += vec3(0.8, 0.95, 1.0) * eyeShock * 0.28;
+  gl_FragColor = vec4(col, 1.0);
+}`,
+  },
+  {
+    name: "Crown Bloom",
+    emoji: "👑",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_nose;
+uniform float u_face_w;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+float sparkle(vec2 uv, vec2 pt, float size) {
+  float d = distance(uv, pt);
+  return smoothstep(size, 0.0, d);
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec4 webcam = texture2D(u_tex, uv);
+  vec2 eyeL = mix(vec2(0.35, 0.42), u_eye_l, u_face_detected);
+  vec2 eyeR = mix(vec2(0.65, 0.42), u_eye_r, u_face_detected);
+  vec2 nose = mix(vec2(0.50, 0.55), u_nose, u_face_detected);
+  float faceW = mix(0.30, u_face_w, u_face_detected);
+  vec2 brow = mix(eyeL, eyeR, 0.5);
+  brow.y -= faceW * 0.42;
+  vec2 sideL = brow + vec2(-faceW * 0.36, faceW * 0.16);
+  vec2 sideR = brow + vec2(faceW * 0.36, faceW * 0.16);
+  vec2 top = brow + vec2(0.0, -faceW * 0.34);
+  float crownBand = smoothstep(faceW * 0.09, 0.0, abs(uv.y - brow.y))
+                  * smoothstep(faceW * 0.75, faceW * 0.18, abs(uv.x - brow.x));
+  float spikeL = smoothstep(faceW * 0.14, 0.0, distance(uv, sideL));
+  float spikeR = smoothstep(faceW * 0.14, 0.0, distance(uv, sideR));
+  float spikeT = smoothstep(faceW * 0.16, 0.0, distance(uv, top));
+  float halo = smoothstep(faceW * 0.72, faceW * 0.16, distance(uv, nose));
+  float aurora = 0.5 + 0.5 * sin(uv.x * 40.0 + u_time * 3.5 + uv.y * 13.0);
+  float gem = sparkle(uv, brow + vec2(0.0, faceW * 0.04), faceW * 0.11);
+  vec3 crown = mix(vec3(0.1, 0.55, 1.0), vec3(1.0, 0.25, 0.9), aurora);
+  vec3 base = mix(webcam.rgb, webcam.rgb * vec3(0.35, 0.18, 0.5), halo * 0.55);
+  base += crown * crownBand * 0.75;
+  base += vec3(1.0, 0.85, 0.2) * (spikeL + spikeR + spikeT) * (0.7 + 0.3 * sin(u_time * 6.0));
+  base += vec3(1.0, 0.95, 0.5) * gem;
+  gl_FragColor = vec4(base, 1.0);
+}`,
+  },
 ];
 
 interface WebGLState {
@@ -1004,7 +1139,7 @@ export default function CollabShaderLab() {
           <p>
             Edit a GLSL fragment shader live. Your webcam feeds as{" "}
             <code className="text-teal-400 font-mono">u_tex</code>. Enable{" "}
-            <strong>Face Tracking</strong> to unlock three special shaders —
+            <strong>Face Tracking</strong> to unlock six FaceMesh-reactive shaders —
             eye, nose, and mouth positions are injected as uniforms and update
             every frame as your face moves.
           </p>
