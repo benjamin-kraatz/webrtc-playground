@@ -149,8 +149,8 @@ export default function VideoCall() {
       explanation={
         <div className="space-y-3 text-sm">
           <p>
-            This demo uses the <strong>signaling server</strong> running at
-            <code className="ml-1 text-xs bg-surface-2 px-1 py-0.5 rounded">ws://localhost:3001</code>
+            This demo uses the <strong>signaling server</strong> at
+            <code className="ml-1 text-xs bg-surface-2 px-1 py-0.5 rounded">/ws</code>
             to automatically exchange offer/answer/ICE between peers in the same room.
           </p>
           <p>
@@ -159,7 +159,7 @@ export default function VideoCall() {
             media stream.
           </p>
           {status !== 'connected' && (
-            <p className="text-amber-400">⚠ Signaling server not connected. Run <code className="text-xs bg-surface-2 px-1 py-0.5 rounded">bun run dev</code> at the project root.</p>
+            <p className="text-amber-400">⚠ Signaling unavailable. In local development, run <code className="text-xs bg-surface-2 px-1 py-0.5 rounded">bun run dev</code> at the project root.</p>
           )}
         </div>
       }

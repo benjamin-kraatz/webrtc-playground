@@ -5,10 +5,16 @@
   "scripts": {
     "dev": "concurrently -n client,server -c cyan,yellow \"bun run --cwd client dev\" \"bun run --cwd server dev\"",
     "build": "bun run --cwd client build",
-    "server": "bun run --cwd server dev"
+    "server": "bun run --cwd server dev",
+    "cf:build": "bun run --cwd client build",
+    "cf:dev": "bun run cf:build && wrangler dev",
+    "cf:deploy": "bun run cf:build && wrangler deploy",
+    "cf:typecheck": "tsc -p cloudflare/tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.40.0"
   },
   "dependencies": {
     "@tensorflow/tfjs-backend-webgl": "^4.22.0"

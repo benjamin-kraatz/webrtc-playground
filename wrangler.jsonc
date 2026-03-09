@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "webrtc-playground",
+  "main": "cloudflare/src/index.ts",
+  "compatibility_date": "2026-03-09",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/ws*"],
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SIGNALING_ROOMS",
+        "class_name": "SignalingRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SignalingRoom"],
+    },
+  ],
+
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.07,
+      "invocation_logs": true,
+    },
+  },
+}

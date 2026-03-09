@@ -15,6 +15,10 @@ export class SignalingClient {
     this.url = url;
   }
 
+  isOpen(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
     this.notifyStatus('connecting');
