@@ -619,6 +619,7 @@ export default function CollabShaderLab() {
   const animRef = useRef<number>(0);
   const startTimeRef = useRef<number>(performance.now());
   const webcamStreamRef = useRef<MediaStream | null>(null);
+  const faceCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [shaderCode, setShaderCode] = useState(PRESET_SHADERS[0].code);
   const [shaderError, setShaderError] = useState<string | null>(null);
@@ -630,6 +631,7 @@ export default function CollabShaderLab() {
   // Face tracking
   const [faceActive, setFaceActive] = useState(false);
   const [faceLoading, setFaceLoading] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
   const faceModelRef = useRef<{
     estimateFaces: (v: HTMLVideoElement) => Promise<
       { keypoints: { x: number; y: number; name?: string }[] }[]
@@ -800,18 +802,6 @@ export default function CollabShaderLab() {
     [recompileShader],
   );
 
-  const handlePreset = useCallback(
-    (code: string, name: string) => {
-      logger.info(`Loading preset: ${name}`);
-      setShaderCode(code);
-      recompileShader(code);
-      if (dcRef.current?.readyState === "open") {
-        dcRef.current.send(JSON.stringify({ type: "shader", code }));
-      }
-    },
-    [logger, recompileShader],
-  );
-
   const handleGetWebcam = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -857,41 +847,77 @@ export default function CollabShaderLab() {
     setFaceLoading(false);
   }, [logger]);
 
+  const handlePreset = useCallback(
+    (p: (typeof PRESET_SHADERS)[number]) => {
+      logger.info(`Loading preset: ${p.name}`);
+      setShaderCode(p.code);
+      recompileShader(p.code);
+      if (dcRef.current?.readyState === "open") {
+        dcRef.current.send(JSON.stringify({ type: "shader", code: p.code }));
+      }
+      // Auto-start face tracking when selecting a face shader
+      if (p.face && webcamActive && !faceActive && !faceLoading) {
+        enableFaceTracking();
+      }
+    },
+    [logger, recompileShader, webcamActive, faceActive, faceLoading, enableFaceTracking],
+  );
+
   // Face detection polling loop (~20 fps)
+  // Uses an offscreen canvas so TF.js gets a clean snapshot independent
+  // of the WebGL render loop that reads the same video element.
   useEffect(() => {
     if (!faceActive) return;
     let cancelled = false;
+    let errCount = 0;
+
+    // Create a persistent offscreen canvas for face detection input
+    const offscreen = document.createElement('canvas');
+    faceCanvasRef.current = offscreen;
+
     const detect = async () => {
       if (cancelled) return;
       const model = faceModelRef.current;
       const video = webcamVideoRef.current;
-      if (model && video && video.readyState >= 2) {
-        try {
-          const faces = await model.estimateFaces(video);
-          if (faces.length > 0) {
-            const kp = faces[0].keypoints as { x: number; y: number }[];
-            const vw = video.videoWidth || 480;
-            const vh = video.videoHeight || 270;
-            const eyeL = avg2(kp[33], kp[133]);
-            const eyeR = avg2(kp[362], kp[263]);
-            const faceL = kp[234];
-            const faceR = kp[454];
-            const faceW =
-              Math.hypot(faceR.x - faceL.x, faceR.y - faceL.y) / vw;
-            const mouth = avg2(kp[61], kp[291]);
-            faceDataRef.current = {
-              eyeL: [eyeL.x / vw, eyeL.y / vh],
-              eyeR: [eyeR.x / vw, eyeR.y / vh],
-              nose: [kp[1].x / vw, kp[1].y / vh],
-              mouth: [mouth.x / vw, mouth.y / vh],
-              faceW,
-              detected: true,
-            };
-          } else {
-            faceDataRef.current = { ...faceDataRef.current, detected: false };
+      if (model && video && video.readyState >= 2 && video.videoWidth > 0) {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        // Resize offscreen canvas to match video if needed
+        if (offscreen.width !== vw || offscreen.height !== vh) {
+          offscreen.width = vw;
+          offscreen.height = vh;
+        }
+        const ctx2d = offscreen.getContext('2d');
+        if (ctx2d) {
+          ctx2d.drawImage(video, 0, 0, vw, vh);
+          try {
+            const faces = await model.estimateFaces(offscreen as unknown as HTMLVideoElement);
+            errCount = 0;
+            if (faces.length > 0) {
+              const kp = faces[0].keypoints as { x: number; y: number }[];
+              const eyeL = avg2(kp[33], kp[133]);
+              const eyeR = avg2(kp[362], kp[263]);
+              const faceL = kp[234];
+              const faceR = kp[454];
+              const faceW = Math.hypot(faceR.x - faceL.x, faceR.y - faceL.y) / vw;
+              const mouth = avg2(kp[61], kp[291]);
+              faceDataRef.current = {
+                eyeL: [eyeL.x / vw, eyeL.y / vh],
+                eyeR: [eyeR.x / vw, eyeR.y / vh],
+                nose: [kp[1].x / vw, kp[1].y / vh],
+                mouth: [mouth.x / vw, mouth.y / vh],
+                faceW,
+                detected: true,
+              };
+              setFaceDetected(true);
+            } else {
+              faceDataRef.current = { ...faceDataRef.current, detected: false };
+              setFaceDetected(false);
+            }
+          } catch (e) {
+            errCount++;
+            if (errCount <= 3) logger.error(`Face detection error: ${e}`);
           }
-        } catch {
-          /* ignore frame errors */
         }
       }
       if (!cancelled) setTimeout(detect, 50);
@@ -899,8 +925,9 @@ export default function CollabShaderLab() {
     detect();
     return () => {
       cancelled = true;
+      faceCanvasRef.current = null;
     };
-  }, [faceActive]);
+  }, [faceActive, logger]);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
@@ -1004,9 +1031,14 @@ export default function CollabShaderLab() {
                 Peer editing...
               </div>
             )}
-            {faceActive && (
-              <div className="absolute top-2 left-2 px-2 py-1 bg-violet-900/70 border border-violet-600 text-violet-300 text-xs rounded-lg">
-                👁 Face tracking
+            {faceLoading && (
+              <div className="absolute top-2 left-2 px-2 py-1 bg-zinc-800/90 border border-zinc-600 text-zinc-300 text-xs rounded-lg animate-pulse">
+                ⏳ Loading face model…
+              </div>
+            )}
+            {faceActive && !faceLoading && (
+              <div className={`absolute top-2 left-2 px-2 py-1 border text-xs rounded-lg ${faceDetected ? 'bg-violet-900/80 border-violet-500 text-violet-200' : 'bg-zinc-800/80 border-zinc-600 text-zinc-400'}`}>
+                {faceDetected ? '👁 Face detected' : '👁 Looking for face…'}
               </div>
             )}
           </div>
@@ -1029,7 +1061,7 @@ export default function CollabShaderLab() {
               {PRESET_SHADERS.filter((p) => !p.face).map((p) => (
                 <button
                   key={p.name}
-                  onClick={() => handlePreset(p.code, p.name)}
+                  onClick={() => handlePreset(p)}
                   className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-xs font-medium rounded-lg transition-colors"
                 >
                   {p.emoji} {p.name}
@@ -1043,7 +1075,8 @@ export default function CollabShaderLab() {
               {PRESET_SHADERS.filter((p) => p.face).map((p) => (
                 <button
                   key={p.name}
-                  onClick={() => handlePreset(p.code, p.name)}
+                  onClick={() => handlePreset(p)}
+                  title={!webcamActive ? "Enable webcam first" : ""}
                   className="px-3 py-1.5 bg-violet-950 hover:bg-violet-900 border border-violet-700 text-violet-200 text-xs font-medium rounded-lg transition-colors"
                 >
                   {p.emoji} {p.name}
