@@ -24,7 +24,6 @@ interface Props {
 export function LogPanel({ logger, className, maxHeight = '200px' }: Props) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,8 +31,9 @@ export function LogPanel({ logger, className, maxHeight = '200px' }: Props) {
   }, [logger]);
 
   useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    const el = containerRef.current;
+    if (autoScroll && el) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [entries, autoScroll]);
 
@@ -76,7 +76,6 @@ export function LogPanel({ logger, className, maxHeight = '200px' }: Props) {
             <span className="text-zinc-300 break-all">{entry.message}</span>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
