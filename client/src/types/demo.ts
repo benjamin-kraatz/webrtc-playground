@@ -10,7 +10,8 @@ export type SectionId =
   | 'advanced'
   | 'multiparty'
   | 'cuttingedge'
-  | 'games';
+  | 'games'
+  | 'mashups';
 
 export interface DemoMeta {
   id: string;
