@@ -508,6 +508,226 @@ void main() {
   gl_FragColor = vec4(col.rgb, 1.0);
 }`,
   },
+  {
+    name: "Neural Net",
+    emoji: "🧠",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_nose;
+uniform vec2  u_mouth;
+uniform float u_face_w;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+// Signed distance to a line segment
+float sdSeg(vec2 p, vec2 a, vec2 b) {
+  vec2 ab = b - a;
+  float t  = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
+  return length(p - (a + t * ab));
+}
+
+// Animated signal spark travelling from a→b
+float spark(vec2 uv, vec2 a, vec2 b, float speed, float phase) {
+  vec2 ab = b - a;
+  float t    = clamp(dot(uv - a, ab) / dot(ab, ab), 0.0, 1.0);
+  float dist = length(uv - (a + t * ab));
+  float onEdge = smoothstep(0.007, 0.001, dist);
+  float pos    = fract(u_time * speed + phase);
+  return smoothstep(0.10, 0.0, abs(t - pos)) * onEdge;
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec4 col = texture2D(u_tex, uv);
+  vec2 el  = mix(vec2(0.35, 0.42), u_eye_l,  u_face_detected);
+  vec2 er  = mix(vec2(0.65, 0.42), u_eye_r,  u_face_detected);
+  vec2 ns  = mix(vec2(0.50, 0.55), u_nose,   u_face_detected);
+  vec2 mt  = mix(vec2(0.50, 0.67), u_mouth,  u_face_detected);
+  float fw = mix(0.30, u_face_w,   u_face_detected);
+
+  // Dark neural-tinted base from webcam luma
+  float luma = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 base = luma * vec3(0.04, 0.11, 0.22);
+
+  // 6 edges of the fully-connected 4-node graph
+  float edgeDist = 9.9;
+  edgeDist = min(edgeDist, sdSeg(uv, el, er));
+  edgeDist = min(edgeDist, sdSeg(uv, el, ns));
+  edgeDist = min(edgeDist, sdSeg(uv, er, ns));
+  edgeDist = min(edgeDist, sdSeg(uv, ns, mt));
+  edgeDist = min(edgeDist, sdSeg(uv, el, mt));
+  edgeDist = min(edgeDist, sdSeg(uv, er, mt));
+  base += vec3(0.05, 0.35, 0.80) * smoothstep(0.010, 0.002, edgeDist) * 0.65;
+
+  // Bidirectional pulses on each edge
+  float sparks = 0.0;
+  sparks += spark(uv, el, er, 0.80, 0.00);
+  sparks += spark(uv, er, el, 0.65, 0.25);
+  sparks += spark(uv, el, ns, 0.90, 0.10);
+  sparks += spark(uv, er, ns, 0.75, 0.50);
+  sparks += spark(uv, ns, mt, 1.10, 0.35);
+  sparks += spark(uv, mt, ns, 0.85, 0.70);
+  sparks += spark(uv, el, mt, 0.60, 0.80);
+  sparks += spark(uv, er, mt, 0.70, 0.15);
+  base += vec3(0.40, 0.90, 1.00) * min(sparks * 2.0, 1.0);
+
+  // Landmark nodes
+  float nr  = fw * 0.055;
+  float pulse = 0.5 + 0.5 * sin(u_time * 2.5);
+  float pingR = nr + fw * 0.08 * pulse;
+  float nodes = 0.0;
+  nodes += smoothstep(nr,        0.0, length(uv - el));
+  nodes += smoothstep(nr,        0.0, length(uv - er));
+  nodes += smoothstep(nr * 0.8,  0.0, length(uv - ns));
+  nodes += smoothstep(nr,        0.0, length(uv - mt));
+  // Expanding ping rings
+  nodes += smoothstep(0.010, 0.0, abs(length(uv - el) - pingR)) * (1.0 - pulse);
+  nodes += smoothstep(0.010, 0.0, abs(length(uv - er) - pingR)) * (1.0 - pulse);
+  nodes += smoothstep(0.008, 0.0, abs(length(uv - ns) - pingR * 0.85)) * (1.0 - pulse);
+  nodes += smoothstep(0.010, 0.0, abs(length(uv - mt) - pingR)) * (1.0 - pulse);
+  base += vec3(0.00, 1.00, 0.90) * min(nodes, 1.0) * 1.4;
+
+  gl_FragColor = vec4(base, 1.0);
+}`,
+  },
+  {
+    name: "Thermal",
+    emoji: "🌡️",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_nose;
+uniform vec2  u_mouth;
+uniform float u_face_w;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+// Scientific IR false-colour ramp: black→blue→cyan→green→yellow→red→white
+vec3 thermalRamp(float t) {
+  t = clamp(t * 6.0, 0.0, 6.0);
+  vec3 c0 = vec3(0.00, 0.00, 0.10);
+  vec3 c1 = vec3(0.00, 0.05, 0.60);
+  vec3 c2 = vec3(0.00, 0.60, 0.80);
+  vec3 c3 = vec3(0.15, 0.90, 0.20);
+  vec3 c4 = vec3(1.00, 0.85, 0.00);
+  vec3 c5 = vec3(1.00, 0.10, 0.00);
+  vec3 c6 = vec3(1.00, 1.00, 1.00);
+  vec3 col = mix(c0, c1, clamp(t,       0.0, 1.0));
+  col = mix(col, mix(c1, c2, clamp(t - 1.0, 0.0, 1.0)), step(1.0, t));
+  col = mix(col, mix(c2, c3, clamp(t - 2.0, 0.0, 1.0)), step(2.0, t));
+  col = mix(col, mix(c3, c4, clamp(t - 3.0, 0.0, 1.0)), step(3.0, t));
+  col = mix(col, mix(c4, c5, clamp(t - 4.0, 0.0, 1.0)), step(4.0, t));
+  col = mix(col, mix(c5, c6, clamp(t - 5.0, 0.0, 1.0)), step(5.0, t));
+  return col;
+}
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5);
+}
+
+void main() {
+  vec2 uv = v_uv;
+  vec4 col = texture2D(u_tex, uv);
+  vec2 el  = mix(vec2(0.35, 0.42), u_eye_l,  u_face_detected);
+  vec2 er  = mix(vec2(0.65, 0.42), u_eye_r,  u_face_detected);
+  vec2 ns  = mix(vec2(0.50, 0.55), u_nose,   u_face_detected);
+  vec2 mt  = mix(vec2(0.50, 0.67), u_mouth,  u_face_detected);
+  float fw = mix(0.30, u_face_w,   u_face_detected);
+
+  // Webcam luma gives ambient background heat
+  float luma = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+  float heat = luma * 0.28;
+
+  // Gaussian heat plumes from each landmark
+  float sp = fw * 4.0;
+  heat += 0.55 * exp(-length(uv - el) * sp * 4.0);
+  heat += 0.55 * exp(-length(uv - er) * sp * 4.0);
+  heat += 0.50 * exp(-length(uv - ns) * sp * 3.5);
+  heat += 0.45 * exp(-length(uv - mt) * sp * 3.5);
+
+  // Subtle breathing pulse centred on nose
+  heat += 0.04 * sin(u_time * 1.3) * exp(-length(uv - ns) * sp * 2.5);
+
+  // Sensor grain
+  heat += (hash(uv * 280.0 + fract(u_time * 0.4)) - 0.5) * 0.03;
+
+  gl_FragColor = vec4(thermalRamp(heat), 1.0);
+}`,
+  },
+  {
+    name: "Rift",
+    emoji: "⚡",
+    face: true,
+    code: `precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2  u_eye_l;
+uniform vec2  u_eye_r;
+uniform vec2  u_nose;
+uniform vec2  u_mouth;
+uniform float u_face_w;
+uniform float u_face_detected;
+varying vec2 v_uv;
+
+void main() {
+  vec2 uv  = v_uv;
+  vec2 el  = mix(vec2(0.35, 0.42), u_eye_l,  u_face_detected);
+  vec2 er  = mix(vec2(0.65, 0.42), u_eye_r,  u_face_detected);
+  vec2 ns  = mix(vec2(0.50, 0.55), u_nose,   u_face_detected);
+
+  // Jagged dimensional tear centred on the nose x axis
+  float riftX = ns.x
+    + 0.020 * sin(uv.y * 14.0 + u_time * 3.5)
+    + 0.010 * sin(uv.y * 37.0 - u_time * 6.5)
+    + 0.005 * sin(uv.y * 83.0 + u_time * 10.0);
+
+  // Left eye: counter-clockwise vortex
+  float spinL =  0.0030 * sin(u_time * 2.0);
+  vec2 dL = uv - el;
+  float aL = spinL / (dot(dL, dL) + 0.007);
+  float csL = cos(aL), snL = sin(aL);
+  vec2 uvL = el + vec2(csL * dL.x - snL * dL.y, snL * dL.x + csL * dL.y);
+
+  // Right eye: clockwise vortex (opposite spin)
+  float spinR = -spinL;
+  vec2 dR = uv - er;
+  float aR = spinR / (dot(dR, dR) + 0.007);
+  float csR = cos(aR), snR = sin(aR);
+  vec2 uvR = er + vec2(csR * dR.x - snR * dR.y, snR * dR.x + csR * dR.y);
+
+  // This dimension (left): warm tones
+  vec4 leftCol = texture2D(u_tex, clamp(uvL, 0.0, 1.0));
+  leftCol.rgb *= vec3(1.12, 1.03, 0.85);
+
+  // Mirror dimension (right): flipped around nose, inverted, cold + glitch
+  vec2 uvFlip  = vec2(2.0 * ns.x - uvR.x, uvR.y);
+  uvFlip.x    += 0.020 * sin(uv.y * 28.0 - u_time * 9.0);
+  vec4 rightCol = texture2D(u_tex, clamp(uvFlip, 0.0, 1.0));
+  rightCol.rgb  = 1.0 - rightCol.rgb;
+  rightCol.rgb *= vec3(0.70, 0.82, 1.20);
+  rightCol.rgb  = clamp(rightCol.rgb, 0.0, 1.0);
+
+  // Blend sides across the tear
+  float blend = smoothstep(-0.003, 0.003, uv.x - riftX);
+  vec3 col = mix(leftCol.rgb, rightCol.rgb, blend);
+
+  // Energy crack: white core + wider blue aura
+  float riftDist = abs(uv.x - riftX);
+  float flicker  = 0.7 + 0.3 * sin(u_time * 20.0 + uv.y * 60.0);
+  col = mix(col, vec3(0.85, 0.97, 1.00) * flicker,
+            smoothstep(0.010, 0.001, riftDist) * 0.95);
+  col += vec3(0.15, 0.45, 1.00) * smoothstep(0.040, 0.0, riftDist) * 0.35;
+
+  gl_FragColor = vec4(col, 1.0);
+}`,
+  },
 ];
 
 interface WebGLState {
@@ -1004,9 +1224,9 @@ export default function CollabShaderLab() {
           <p>
             Edit a GLSL fragment shader live. Your webcam feeds as{" "}
             <code className="text-teal-400 font-mono">u_tex</code>. Enable{" "}
-            <strong>Face Tracking</strong> to unlock three special shaders —
-            eye, nose, and mouth positions are injected as uniforms and update
-            every frame as your face moves.
+            <strong>Face Tracking</strong> to unlock six special shaders —
+            eye, nose, mouth, and face-width positions are injected as uniforms
+            and update every frame as your face moves.
           </p>
           <p>
             Shader edits are debounced 300 ms and synced via{" "}
