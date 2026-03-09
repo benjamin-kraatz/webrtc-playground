@@ -1114,6 +1114,148 @@ export const DEMOS: DemoMeta[] = [
     needsMultipleTabs: false,
     component: lazy(() => import('@/demos/section9-mashups/EchoChamber')),
   },
+
+  // ── NEW PLAYGROUNDS ──────────────────────────────────────────────────────────
+
+  // 1. Live OCR Scanner (Tesseract.js)
+  {
+    id: 'live-ocr',
+    title: 'Live OCR Scanner',
+    path: '/demos/live-ocr',
+    section: 'media',
+    difficulty: 'intermediate',
+    description: 'Tesseract.js reads text from your live webcam feed entirely in-browser — point at any printed text to recognise it.',
+    tags: ['Tesseract.js', 'OCR', 'getUserMedia', 'canvas', 'Web Worker'],
+    needsServer: false,
+    needsMultipleTabs: false,
+    component: lazy(() => import('@/demos/section2-media/LiveOcr')),
+  },
+
+  // 2. Pair Coder (CodeMirror 6)
+  {
+    id: 'pair-coder',
+    title: 'Pair Coder',
+    path: '/demos/pair-coder',
+    section: 'cuttingedge',
+    difficulty: 'advanced',
+    description: 'Real-time collaborative code editor powered by CodeMirror 6 with syntax highlighting for JS/TS, HTML, CSS — synced via RTCDataChannel.',
+    tags: ['CodeMirror 6', 'RTCDataChannel', 'collaborative editing', 'syntax highlighting', 'pair programming'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section7-cuttingedge/PairCoder')),
+  },
+
+  // 3. Shared World Map (Leaflet.js)
+  {
+    id: 'shared-map',
+    title: 'Shared World Map',
+    path: '/demos/shared-map',
+    section: 'mashups',
+    difficulty: 'intermediate',
+    description: 'Explore an OpenStreetMap together with Leaflet.js — drop pins and sync your map view with a peer via RTCDataChannel.',
+    tags: ['Leaflet.js', 'OpenStreetMap', 'RTCDataChannel', 'markers', 'map sync'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section9-mashups/SharedMap')),
+  },
+
+  // 4. Chess Duel (chess.js)
+  {
+    id: 'chess-duel',
+    title: 'Chess Duel',
+    path: '/demos/chess-duel',
+    section: 'games',
+    difficulty: 'intermediate',
+    description: 'Two-player chess over RTCDataChannel — chess.js handles move validation, check, and checkmate. Only move coords sent over the wire.',
+    tags: ['chess.js', 'RTCDataChannel', 'game', 'chess', 'signaling'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section8-games/ChessDuel')),
+  },
+
+  // 5. D3 Live Stats Visualizer (D3.js)
+  {
+    id: 'd3-stats-viz',
+    title: 'D3 Live Stats Visualizer',
+    path: '/demos/d3-stats-viz',
+    section: 'advanced',
+    difficulty: 'intermediate',
+    description: 'Beautiful D3.js animated charts of live RTCPeerConnection stats — round-trip time, jitter, and throughput from a loopback flood test.',
+    tags: ['D3.js', 'RTCStatsReport', 'getStats', 'line chart', 'real-time'],
+    needsServer: false,
+    needsMultipleTabs: false,
+    component: lazy(() => import('@/demos/section5-advanced/D3StatsViz')),
+  },
+
+  // 6. WaveSurfer Audio Call (wavesurfer.js)
+  {
+    id: 'wavesurfer-call',
+    title: 'WaveSurfer Audio Call',
+    path: '/demos/wavesurfer-call',
+    section: 'audiovideo',
+    difficulty: 'intermediate',
+    description: 'Peer-to-peer audio call where WaveSurfer.js visualizes both the local mic and remote peer\'s voice as animated waveforms.',
+    tags: ['WaveSurfer.js', 'getUserMedia', 'RTCPeerConnection', 'MediaStream', 'waveform'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section4-audiovideo/WaveSurferCall')),
+  },
+
+  // 7. p5.js Art Stream (p5.js)
+  {
+    id: 'p5-art-stream',
+    title: 'p5.js Art Stream',
+    path: '/demos/p5-art-stream',
+    section: 'cuttingedge',
+    difficulty: 'advanced',
+    description: 'A p5.js Perlin noise flow field captured via captureStream() and streamed over a WebRTC loopback — any canvas becomes a camera.',
+    tags: ['p5.js', 'captureStream', 'MediaStream', 'generative art', 'Perlin noise', 'WebRTC'],
+    needsServer: false,
+    needsMultipleTabs: false,
+    component: lazy(() => import('@/demos/section7-cuttingedge/P5ArtStream')),
+  },
+
+  // 8. Markdown Collab (marked + highlight.js)
+  {
+    id: 'markdown-collab',
+    title: 'Markdown Collab Pad',
+    path: '/demos/markdown-collab',
+    section: 'mashups',
+    difficulty: 'intermediate',
+    description: 'Collaborative Markdown editor with live rendered preview — highlight.js syntax-highlights code blocks, changes sync via RTCDataChannel.',
+    tags: ['marked', 'highlight.js', 'Markdown', 'RTCDataChannel', 'collaboration', 'live preview'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section9-mashups/MarkdownCollab')),
+  },
+
+  // 9. P2P Kanban Board (@dnd-kit)
+  {
+    id: 'kanban-board',
+    title: 'P2P Kanban Board',
+    path: '/demos/kanban-board',
+    section: 'mashups',
+    difficulty: 'intermediate',
+    description: 'Drag-and-drop Kanban board powered by @dnd-kit — add cards, move them between columns, all synced in real time via RTCDataChannel.',
+    tags: ['@dnd-kit', 'drag-and-drop', 'RTCDataChannel', 'kanban', 'collaboration'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section9-mashups/KanbanBoard')),
+  },
+
+  // 10. Fabric.js Design Studio (fabric.js)
+  {
+    id: 'fabric-studio',
+    title: 'Fabric.js Design Studio',
+    path: '/demos/fabric-studio',
+    section: 'cuttingedge',
+    difficulty: 'advanced',
+    description: 'Collaborative vector canvas with freehand drawing, shapes, and text powered by Fabric.js v7 — all objects sync via RTCDataChannel.',
+    tags: ['Fabric.js', 'RTCDataChannel', 'canvas', 'vector', 'collaboration', 'design'],
+    needsServer: true,
+    needsMultipleTabs: true,
+    component: lazy(() => import('@/demos/section7-cuttingedge/FabricStudio')),
+  },
 ];
 
 export function getDemosBySection(sectionId: SectionId): DemoMeta[] {
