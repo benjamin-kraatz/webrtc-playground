@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Shell } from '@/components/layout/Shell';
-import { DEMOS } from '@/config/demos';
+import { DEMOS, SECTIONS } from '@/config/demos';
 
 function LoadingSpinner() {
   return (
@@ -15,6 +15,9 @@ function LoadingSpinner() {
 }
 
 function HomePage() {
+  const demoCount = DEMOS.length;
+  const sectionCount = SECTIONS.length;
+
   return (
     <div className="max-w-3xl mx-auto p-8 text-center">
       <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-2xl mx-auto mb-6">
@@ -22,13 +25,13 @@ function HomePage() {
       </div>
       <h1 className="text-3xl font-bold text-zinc-100 mb-3">WebRTC Playground</h1>
       <p className="text-lg text-zinc-400 mb-8">
-        90 interactive demos exploring every corner of the WebRTC API — from your first
+        {demoCount} interactive demos exploring every corner of the WebRTC API — from your first
         RTCPeerConnection to quantum-entangled Bloch spheres.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
         {[
-          { n: '90', label: 'Demos' },
-          { n: '9', label: 'Sections' },
+          { n: String(demoCount), label: 'Demos' },
+          { n: String(sectionCount), label: 'Sections' },
           { n: '0', label: 'Dependencies*' },
           { n: '∞', label: 'Things to learn' },
         ].map(({ n, label }) => (
