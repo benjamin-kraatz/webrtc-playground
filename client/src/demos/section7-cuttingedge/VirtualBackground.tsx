@@ -3,12 +3,13 @@ import { DemoLayout } from '@/components/layout/DemoLayout';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Logger } from '@/lib/logger';
 
-/** Capture and processing resolution (width × height) for the camera feed.
- *  Used for getUserMedia constraints, video/canvas dimensions, and segmentation.
- *  Lower values improve performance; higher values improve detail. 640×480 is a
- *  good balance for real-time ML in the browser. */
-const FRAME_WIDTH = 640;
-const FRAME_HEIGHT = 480;
+/** Resolution options for capture and processing. Lower = faster ML; higher = sharper. */
+const RESOLUTIONS = [
+  { label: '320×240', width: 320, height: 240 },
+  { label: '640×480', width: 640, height: 480 },
+  { label: '1280×720 (HD)', width: 1280, height: 720 },
+  { label: '1920×1080 (FHD)', width: 1920, height: 1080 },
+] as const;
 
 const CODE = `// TensorFlow.js body segmentation
 import * as bodySegmentation from '@tensorflow-models/body-segmentation';
@@ -60,6 +61,11 @@ export default function VirtualBackground() {
   const [active, setActive] = useState(false);
   const [bgMode, setBgMode] = useState<BgMode>('blur');
   const [params, setParams] = useState(DEFAULT_PARAMS);
+  const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]>(RESOLUTIONS[1]);
+  const [fps, setFps] = useState(15);
+  const [settings, setSettings] = useState<{ width: number; height: number; frameRate?: number } | null>(null);
+  const resolutionRef = useRef(resolution);
+  const fpsRef = useRef(fps);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const animRef = useRef<number>(0);
@@ -70,6 +76,7 @@ export default function VirtualBackground() {
 
   useEffect(() => { bgModeRef.current = bgMode; }, [bgMode]);
   useEffect(() => { paramsRef.current = params; }, [params]);
+  useEffect(() => { resolutionRef.current = resolution; fpsRef.current = fps; }, [resolution, fps]);
 
   const handleStart = async () => {
     setLoading(true);
@@ -95,26 +102,32 @@ export default function VirtualBackground() {
       setLoadProgress(100);
       logger.success('Model loaded!');
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: FRAME_WIDTH, height: FRAME_HEIGHT } });
+      const r = resolutionRef.current;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: r.width },
+          height: { ideal: r.height },
+          frameRate: { ideal: fpsRef.current },
+        },
+      });
       streamRef.current = stream;
       const video = videoRef.current!;
-      video.width = FRAME_WIDTH;
-      video.height = FRAME_HEIGHT;
       video.srcObject = stream;
       await video.play();
 
-      // Wait for video to have decoded frames before running segmentation
       await new Promise<void>((resolve) => {
-        if (video.readyState >= 2) {
-          resolve();
-          return;
-        }
-        video.addEventListener('loadeddata', () => resolve(), { once: true });
+        if (video.readyState >= 2) resolve();
+        else video.addEventListener('loadeddata', () => resolve(), { once: true });
       });
 
+      const applied = stream.getVideoTracks()[0].getSettings();
+      const cw = applied.width ?? r.width;
+      const ch = applied.height ?? r.height;
+      setSettings({ width: cw, height: ch, frameRate: applied.frameRate });
+
       const canvas = canvasRef.current!;
-      canvas.width = FRAME_WIDTH;
-      canvas.height = FRAME_HEIGHT;
+      canvas.width = cw;
+      canvas.height = ch;
       const ctx = canvas.getContext('2d')!;
 
       const segModel = model as { segmentPeople: (el: HTMLVideoElement | HTMLCanvasElement) => Promise<unknown[]> };
@@ -122,20 +135,20 @@ export default function VirtualBackground() {
         toBinaryMask: (segs: unknown[], fg?: object, bg?: object, drawContour?: boolean, fgThreshold?: number) => Promise<ImageData | null>;
       };
       const frameCanvas = document.createElement('canvas');
-      frameCanvas.width = FRAME_WIDTH;
-      frameCanvas.height = FRAME_HEIGHT;
+      frameCanvas.width = cw;
+      frameCanvas.height = ch;
       const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true })!;
 
       const bgCanvas = document.createElement('canvas');
-      bgCanvas.width = FRAME_WIDTH;
-      bgCanvas.height = FRAME_HEIGHT;
+      bgCanvas.width = cw;
+      bgCanvas.height = ch;
       const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true })!;
 
       const maskCanvas = document.createElement('canvas');
       const maskCtx = maskCanvas.getContext('2d')!;
       const scaledMaskCanvas = document.createElement('canvas');
-      scaledMaskCanvas.width = FRAME_WIDTH;
-      scaledMaskCanvas.height = FRAME_HEIGHT;
+      scaledMaskCanvas.width = cw;
+      scaledMaskCanvas.height = ch;
       const scaledMaskCtx = scaledMaskCanvas.getContext('2d', { willReadFrequently: true })!;
       const pixelateBuffer = document.createElement('canvas');
       const pixelateCtx = pixelateBuffer.getContext('2d')!;
@@ -143,11 +156,21 @@ export default function VirtualBackground() {
       const render = async () => {
         if (!modelRef.current) return;
         try {
-          const cw = FRAME_WIDTH;
-          const ch = FRAME_HEIGHT;
-          if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+          let cw = video.videoWidth;
+          let ch = video.videoHeight;
+          if (video.readyState < 2 || cw === 0 || ch === 0) {
             animRef.current = requestAnimationFrame(() => { render().catch(console.error); });
             return;
+          }
+          if (frameCanvas.width !== cw || frameCanvas.height !== ch) {
+            frameCanvas.width = cw;
+            frameCanvas.height = ch;
+            bgCanvas.width = cw;
+            bgCanvas.height = ch;
+            scaledMaskCanvas.width = cw;
+            scaledMaskCanvas.height = ch;
+            canvas.width = cw;
+            canvas.height = ch;
           }
 
           frameCtx.clearRect(0, 0, cw, ch);
@@ -275,7 +298,7 @@ export default function VirtualBackground() {
 
       render().catch(console.error);
       setActive(true);
-      logger.success('Virtual background active!');
+      logger.success(`Virtual background active! ${cw}×${ch}@${applied.frameRate?.toFixed(0) ?? '?'}fps`);
     } catch (e) {
       logger.error(`Failed: ${e}`);
     } finally {
@@ -288,7 +311,31 @@ export default function VirtualBackground() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     modelRef.current = null;
     setActive(false);
+    setSettings(null);
     setLoadProgress(0);
+  };
+
+  const handleApplyConstraints = async () => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    const r = resolutionRef.current;
+    try {
+      await track.applyConstraints({
+        width: { ideal: r.width },
+        height: { ideal: r.height },
+        frameRate: { ideal: fpsRef.current },
+      });
+      const applied = track.getSettings();
+      setSettings({
+        width: applied.width ?? r.width,
+        height: applied.height ?? r.height,
+        frameRate: applied.frameRate,
+      });
+      logger.success(`Applied: ${applied.width}×${applied.height}@${applied.frameRate?.toFixed(0) ?? '?'}fps`);
+    } catch (e) {
+      logger.error(`applyConstraints failed: ${e}`);
+    }
   };
 
   useEffect(() => () => { cancelAnimationFrame(animRef.current); streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
@@ -305,26 +352,75 @@ export default function VirtualBackground() {
             from the background in real time. The segmentation mask is applied on a canvas, which can
             then be streamed via WebRTC.
           </p>
+          <p>
+            Pick a resolution and frame rate before starting. Lower resolution (e.g. 320×240) runs
+            the ML faster on weak devices; higher (720p, 1080p) gives sharper output. You can change
+            resolution mid-session with &quot;Apply resolution&quot; — canvases resize automatically.
+          </p>
           <p className="text-amber-400/80">
-            ⚡ The model is ~15MB and requires a moment to download and initialize. Processing runs
-            entirely in the browser — no data is sent to any server.
+            ⚡ The model is ~15MB and requires a moment to download. Processing runs entirely in
+            the browser — no data is sent to any server.
           </p>
         </div>
       }
       demo={
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2 items-center">
-            {!active && !loading && (
-              <button onClick={handleStart} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg">
-                Load Model & Start
-              </button>
-            )}
-            {active && (
-              <button onClick={handleStop} className="px-4 py-2 bg-surface-2 hover:bg-surface-3 text-zinc-300 text-sm font-medium rounded-lg">
-                Stop
-              </button>
-            )}
+          <div className="flex flex-wrap gap-4 items-end">
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 mb-1.5">Resolution</p>
+              <div className="flex flex-wrap gap-2">
+                {RESOLUTIONS.map((r) => (
+                  <label key={r.label} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="res"
+                      checked={resolution.width === r.width}
+                      onChange={() => setResolution(r)}
+                      className="accent-blue-400"
+                    />
+                    <span className="text-sm text-zinc-300">{r.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 mb-1">Frame rate: {fps} fps</p>
+              <input
+                type="range"
+                min={10}
+                max={30}
+                step={5}
+                value={fps}
+                onChange={(e) => setFps(Number(e.target.value))}
+                className="w-24 accent-blue-400"
+              />
+            </div>
+            <div className="flex gap-2">
+              {!active && !loading && (
+                <button onClick={handleStart} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg">
+                  Load Model & Start
+                </button>
+              )}
+              {active && (
+                <>
+                  <button onClick={handleApplyConstraints} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg">
+                    Apply resolution
+                  </button>
+                  <button onClick={handleStop} className="px-4 py-2 bg-surface-2 hover:bg-surface-3 text-zinc-300 text-sm font-medium rounded-lg">
+                    Stop
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+          {active && settings && (
+            <div className="flex gap-3 text-sm text-zinc-500">
+              <span>Actual: {settings.width}×{settings.height}</span>
+              {settings.frameRate != null && (
+                <span>@ {settings.frameRate.toFixed(1)} fps</span>
+              )}
+            </div>
+          )}
 
           {loading && <ProgressBar value={loadProgress} label="Loading TensorFlow.js model..." />}
 
