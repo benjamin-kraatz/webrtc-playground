@@ -75,7 +75,7 @@ export function Sidebar({ open, onClose }: Props) {
             </div>
             <div>
               <p className="text-sm font-semibold text-zinc-100">WebRTC Playground</p>
-              <p className="text-xs text-zinc-500">27 interactive demos</p>
+              <p className="text-xs text-zinc-500">{DEMOS.length} interactive demos</p>
             </div>
           </div>
         </div>

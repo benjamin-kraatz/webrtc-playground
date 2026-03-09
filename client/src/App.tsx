@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Shell } from '@/components/layout/Shell';
-import { DEMOS } from '@/config/demos';
+import { DEMOS, SECTIONS } from '@/config/demos';
 
 function LoadingSpinner() {
   return (
@@ -15,6 +15,7 @@ function LoadingSpinner() {
 }
 
 function HomePage() {
+  const totalDemos = DEMOS.length;
   return (
     <div className="max-w-3xl mx-auto p-8 text-center">
       <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-2xl mx-auto mb-6">
@@ -22,14 +23,14 @@ function HomePage() {
       </div>
       <h1 className="text-3xl font-bold text-zinc-100 mb-3">WebRTC Playground</h1>
       <p className="text-lg text-zinc-400 mb-8">
-        90 interactive demos exploring every corner of the WebRTC API — from your first
+        {totalDemos} interactive demos exploring every corner of the WebRTC API — from your first
         RTCPeerConnection to quantum-entangled Bloch spheres.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
         {[
-          { n: '90', label: 'Demos' },
-          { n: '9', label: 'Sections' },
-          { n: '0', label: 'Dependencies*' },
+          { n: String(totalDemos), label: 'Demos' },
+          { n: String(SECTIONS.length), label: 'Sections' },
+          { n: 'Many', label: 'Tech stacks' },
           { n: '∞', label: 'Things to learn' },
         ].map(({ n, label }) => (
           <div key={label} className="bg-surface-1 border border-zinc-800 rounded-xl p-4">
@@ -38,7 +39,6 @@ function HomePage() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-zinc-600 mt-4">*no runtime WebRTC library — all native browser APIs</p>
       <p className="text-sm text-zinc-500 mt-6">← Pick a demo from the sidebar to get started</p>
     </div>
   );
