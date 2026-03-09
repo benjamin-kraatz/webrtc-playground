@@ -29,6 +29,13 @@ ctx.drawImage(videoElement, 0, 0); // blurred background
 ctx.filter = 'none';
 ctx.putImageData(mask, 0, 0);     // person cutout`;
 
+interface EmojiParticle {
+  x: number; y: number; emoji: string; size: number;
+  life: number; vy: number; rotation: number; rotSpeed: number;
+}
+
+const EMOJI_LIST = ['🎉','🌟','💫','✨','🦋','🌸','🍀','🎈','🌈','🦄','⭐','🔥','💥','🎊','🎁','🎶','💎','🌺','🚀','👾','💜','💚','💙','🧡','❤️','🌙','☀️','⚡','🌊','🍄','🦚','🎯','🪄','🫧','🌀'];
+
 const MODES = [
   { id: 'blur', label: '🌫 Blur' },
   { id: 'solid', label: '🎨 Solid' },
@@ -44,6 +51,12 @@ const MODES = [
   { id: 'starfield', label: '🌌 Starfield' },
   { id: 'thermal', label: '🌡️ Thermal' },
   { id: 'sketch', label: '✏️ Neon Sketch' },
+  { id: 'custom-image', label: '📸 Custom BG' },
+  { id: 'pencil', label: '🖊️ Pencil' },
+  { id: 'emoji', label: '🎉 Emoji Pop' },
+  { id: 'halo', label: '✨ Halo' },
+  { id: 'matrix', label: '💾 Matrix' },
+  { id: 'duotone', label: '🎨 Duotone' },
 ] as const;
 
 type BgMode = (typeof MODES)[number]['id'];
@@ -64,6 +77,13 @@ const DEFAULT_PARAMS = {
   starSpeed: 0.006,
   sketchThreshold: 40,
   sketchColor: '#00ffff',
+  haloColor: '#7c3aed',
+  haloSize: 22,
+  haloIntensity: 0.85,
+  matrixSpeed: 0.5,
+  emojiDensity: 0.5,
+  duotoneShadow: '#1e0a3c',
+  duotoneHighlight: '#f4e0ff',
 };
 
 export default function VirtualBackground() {
@@ -85,6 +105,8 @@ export default function VirtualBackground() {
   const modelRef = useRef<unknown>(null);
   const bgModeRef = useRef<BgMode>('blur');
   const paramsRef = useRef(DEFAULT_PARAMS);
+  const customImageRef = useRef<HTMLImageElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { bgModeRef.current = bgMode; }, [bgMode]);
   useEffect(() => { paramsRef.current = params; }, [params]);
@@ -164,9 +186,15 @@ export default function VirtualBackground() {
       const scaledMaskCtx = scaledMaskCanvas.getContext('2d', { willReadFrequently: true })!;
       const pixelateBuffer = document.createElement('canvas');
       const pixelateCtx = pixelateBuffer.getContext('2d')!;
+      const haloCanvas = document.createElement('canvas');
+      haloCanvas.width = cw;
+      haloCanvas.height = ch;
+      const haloCtx = haloCanvas.getContext('2d')!;
 
       let animTime = 0;
       const stars: Array<{ x: number; y: number; z: number; pz: number }> = [];
+      let matrixDrops: number[] = [];
+      const emojiParticles: EmojiParticle[] = [];
 
       const render = async () => {
         if (!modelRef.current) return;
@@ -185,8 +213,12 @@ export default function VirtualBackground() {
             bgCanvas.height = ch;
             scaledMaskCanvas.width = cw;
             scaledMaskCanvas.height = ch;
+            haloCanvas.width = cw;
+            haloCanvas.height = ch;
             canvas.width = cw;
             canvas.height = ch;
+            matrixDrops = [];
+            emojiParticles.length = 0;
           }
 
           frameCtx.clearRect(0, 0, cw, ch);
@@ -195,7 +227,12 @@ export default function VirtualBackground() {
 
           const p = paramsRef.current;
           const mode = bgModeRef.current;
-          bgCtx.clearRect(0, 0, cw, ch);
+          if (mode === 'matrix') {
+            bgCtx.fillStyle = 'rgba(0,0,0,0.15)';
+            bgCtx.fillRect(0, 0, cw, ch);
+          } else {
+            bgCtx.clearRect(0, 0, cw, ch);
+          }
 
           if (mode === 'blur') {
             bgCtx.save();
@@ -265,7 +302,71 @@ export default function VirtualBackground() {
               bgCtx.lineTo(sx, sy);
               bgCtx.stroke();
             }
-          } else if (mode === 'greyscale' || mode === 'invert' || mode === 'posterize' || mode === 'vignette' || mode === 'thermal' || mode === 'sketch') {
+          } else if (mode === 'custom-image') {
+            if (customImageRef.current?.complete) {
+              bgCtx.drawImage(customImageRef.current, 0, 0, cw, ch);
+            } else {
+              bgCtx.fillStyle = '#111827';
+              bgCtx.fillRect(0, 0, cw, ch);
+              bgCtx.fillStyle = 'rgba(255,255,255,0.18)';
+              bgCtx.font = '14px sans-serif';
+              bgCtx.textAlign = 'center';
+              bgCtx.fillText('Upload a background image above ↑', cw / 2, ch / 2);
+              bgCtx.textAlign = 'left';
+            }
+          } else if (mode === 'emoji') {
+            bgCtx.fillStyle = '#05050f';
+            bgCtx.fillRect(0, 0, cw, ch);
+            if (Math.random() < p.emojiDensity * 0.18) {
+              emojiParticles.push({
+                x: Math.random() * cw, y: ch * 0.2 + Math.random() * ch * 0.6,
+                emoji: EMOJI_LIST[Math.floor(Math.random() * EMOJI_LIST.length)],
+                size: 28 + Math.random() * 46, life: 1,
+                vy: -0.6 - Math.random() * 1.2,
+                rotation: (Math.random() - 0.5) * 0.6, rotSpeed: (Math.random() - 0.5) * 0.04,
+              });
+            }
+            bgCtx.save();
+            bgCtx.textBaseline = 'middle'; bgCtx.textAlign = 'center';
+            for (let ei = emojiParticles.length - 1; ei >= 0; ei--) {
+              const ep = emojiParticles[ei];
+              ep.life -= 0.014; ep.y += ep.vy; ep.rotation += ep.rotSpeed;
+              if (ep.life <= 0) { emojiParticles.splice(ei, 1); continue; }
+              const fadeIn = Math.min(1, (1 - ep.life) * 10);
+              const fadeOut = ep.life < 0.3 ? ep.life / 0.3 : 1;
+              const scale = fadeIn * fadeOut;
+              bgCtx.save();
+              bgCtx.globalAlpha = scale;
+              bgCtx.translate(ep.x, ep.y);
+              bgCtx.rotate(ep.rotation);
+              bgCtx.font = `${ep.size * scale}px serif`;
+              bgCtx.fillText(ep.emoji, 0, 0);
+              bgCtx.restore();
+            }
+            bgCtx.restore();
+          } else if (mode === 'halo') {
+            bgCtx.fillStyle = '#08080f';
+            bgCtx.fillRect(0, 0, cw, ch);
+          } else if (mode === 'matrix') {
+            const mFsz = 16;
+            const cols = Math.floor(cw / mFsz);
+            if (matrixDrops.length !== cols) {
+              matrixDrops = Array.from({ length: cols }, () => Math.floor(Math.random() * ch / mFsz));
+            }
+            const mChars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF<>[]{}#@$%';
+            bgCtx.font = `bold ${mFsz}px monospace`;
+            for (let mc = 0; mc < cols; mc++) {
+              const ch2 = mChars[Math.floor(Math.random() * mChars.length)];
+              bgCtx.fillStyle = '#00ff41';
+              bgCtx.fillText(ch2, mc * mFsz, matrixDrops[mc] * mFsz);
+              bgCtx.fillStyle = '#ccffcc';
+              bgCtx.fillText(ch2, mc * mFsz, matrixDrops[mc] * mFsz);
+              if (Math.random() < 0.025 + p.matrixSpeed * 0.1) {
+                matrixDrops[mc]++;
+                if (matrixDrops[mc] * mFsz > ch + mFsz) matrixDrops[mc] = 0;
+              }
+            }
+          } else if (mode === 'greyscale' || mode === 'invert' || mode === 'posterize' || mode === 'vignette' || mode === 'thermal' || mode === 'sketch' || mode === 'pencil' || mode === 'duotone') {
             bgCtx.drawImage(video, 0, 0, cw, ch);
           } else if (mode === 'none') {
             bgCtx.clearRect(0, 0, cw, ch);
@@ -381,6 +482,48 @@ export default function VirtualBackground() {
               return;
             }
 
+            if (effect === 'pencil') {
+              const src = new Uint8ClampedArray(d);
+              const gray = new Float32Array(cw * ch);
+              for (let i = 0; i < cw * ch; i++) {
+                gray[i] = 0.299 * src[i * 4] + 0.587 * src[i * 4 + 1] + 0.114 * src[i * 4 + 2];
+              }
+              const thresh = p.sketchThreshold;
+              for (let ey = 1; ey < ch - 1; ey++) {
+                for (let ex = 1; ex < cw - 1; ex++) {
+                  const gx =
+                    -gray[(ey - 1) * cw + (ex - 1)] + gray[(ey - 1) * cw + (ex + 1)] +
+                    -2 * gray[ey * cw + (ex - 1)] + 2 * gray[ey * cw + (ex + 1)] +
+                    -gray[(ey + 1) * cw + (ex - 1)] + gray[(ey + 1) * cw + (ex + 1)];
+                  const gy =
+                    -gray[(ey - 1) * cw + (ex - 1)] - 2 * gray[(ey - 1) * cw + ex] - gray[(ey - 1) * cw + (ex + 1)] +
+                    gray[(ey + 1) * cw + (ex - 1)] + 2 * gray[(ey + 1) * cw + ex] + gray[(ey + 1) * cw + (ex + 1)];
+                  const mag = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+                  const di = (ey * cw + ex) * 4;
+                  const t = Math.max(0, (mag - thresh) / 180);
+                  d[di]     = Math.floor(245 * (1 - t * 0.85));
+                  d[di + 1] = Math.floor(235 * (1 - t * 0.85));
+                  d[di + 2] = Math.floor(210 * (1 - t * 0.85));
+                }
+              }
+              return;
+            }
+
+            if (effect === 'duotone') {
+              const hexRgb = (hex: string): [number, number, number] => [
+                parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16),
+              ];
+              const [sr, sg, sb] = hexRgb(p.duotoneShadow);
+              const [hr, hg, hb] = hexRgb(p.duotoneHighlight);
+              for (let i = 0; i < d.length; i += 4) {
+                const lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+                d[i]     = Math.floor(sr + (hr - sr) * lum);
+                d[i + 1] = Math.floor(sg + (hg - sg) * lum);
+                d[i + 2] = Math.floor(sb + (hb - sb) * lum);
+              }
+              return;
+            }
+
             const centerX = cw / 2, centerY = ch / 2;
             const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
             for (let i = 0; i < d.length; i += 4) {
@@ -417,6 +560,8 @@ export default function VirtualBackground() {
           else if (mode === 'glitch') applyEffect(output, 'glitch');
           else if (mode === 'thermal') applyEffect(output, 'thermal');
           else if (mode === 'sketch') applyEffect(output, 'sketch');
+          else if (mode === 'pencil') applyEffect(output, 'pencil');
+          else if (mode === 'duotone') applyEffect(output, 'duotone');
 
           if (segmentations.length === 0) {
             ctx.putImageData(mode === 'none' ? frameData : output, 0, 0);
@@ -449,6 +594,27 @@ export default function VirtualBackground() {
               }
 
               ctx.putImageData(output, 0, 0);
+
+              if (mode === 'halo') {
+                const haloImgData = haloCtx.createImageData(cw, ch);
+                const hr = parseInt(p.haloColor.slice(1, 3), 16);
+                const hg = parseInt(p.haloColor.slice(3, 5), 16);
+                const hb = parseInt(p.haloColor.slice(5, 7), 16);
+                for (let i = 0; i < scaledMask.data.length; i += 4) {
+                  if (scaledMask.data[i + 3] >= 128) {
+                    haloImgData.data[i] = hr;
+                    haloImgData.data[i + 1] = hg;
+                    haloImgData.data[i + 2] = hb;
+                    haloImgData.data[i + 3] = Math.floor(p.haloIntensity * 255);
+                  }
+                }
+                haloCtx.putImageData(haloImgData, 0, 0);
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+                ctx.filter = `blur(${p.haloSize}px)`;
+                ctx.drawImage(haloCanvas, 0, 0);
+                ctx.restore();
+              }
             }
           }
         } catch (error) {
@@ -716,6 +882,91 @@ export default function VirtualBackground() {
                       <span className="text-zinc-400 w-16">Glow color</span>
                       <input type="color" value={params.sketchColor}
                         onChange={(e) => setParams((p) => ({ ...p, sketchColor: e.target.value }))}
+                        className="w-9 h-8 rounded cursor-pointer" />
+                    </label>
+                  </>
+                )}
+                {bgMode === 'custom-image' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-20">Image file</span>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1 bg-surface-3 hover:bg-zinc-600 text-zinc-200 text-xs rounded-lg">
+                      Upload image…
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const img = new Image();
+                        img.onload = () => { customImageRef.current = img; };
+                        img.src = URL.createObjectURL(file);
+                      }} />
+                  </label>
+                )}
+                {bgMode === 'pencil' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-24">Detail</span>
+                    <input type="range" min={10} max={120} value={params.sketchThreshold}
+                      onChange={(e) => setParams((p) => ({ ...p, sketchThreshold: +e.target.value }))}
+                      className="w-32 accent-blue-500" />
+                    <span className="text-zinc-500 tabular-nums w-8">{params.sketchThreshold}</span>
+                  </label>
+                )}
+                {bgMode === 'emoji' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-24">Density</span>
+                    <input type="range" min={0.1} max={1} step={0.05} value={params.emojiDensity}
+                      onChange={(e) => setParams((p) => ({ ...p, emojiDensity: +e.target.value }))}
+                      className="w-32 accent-blue-500" />
+                    <span className="text-zinc-500 tabular-nums w-8">{params.emojiDensity.toFixed(2)}</span>
+                  </label>
+                )}
+                {bgMode === 'halo' && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-16">Halo color</span>
+                      <input type="color" value={params.haloColor}
+                        onChange={(e) => setParams((p) => ({ ...p, haloColor: e.target.value }))}
+                        className="w-9 h-8 rounded cursor-pointer" />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Glow radius</span>
+                      <input type="range" min={5} max={60} value={params.haloSize}
+                        onChange={(e) => setParams((p) => ({ ...p, haloSize: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.haloSize}px</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Intensity</span>
+                      <input type="range" min={0.2} max={1} step={0.05} value={params.haloIntensity}
+                        onChange={(e) => setParams((p) => ({ ...p, haloIntensity: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.haloIntensity.toFixed(2)}</span>
+                    </label>
+                  </>
+                )}
+                {bgMode === 'matrix' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-24">Fall speed</span>
+                    <input type="range" min={0.1} max={1} step={0.05} value={params.matrixSpeed}
+                      onChange={(e) => setParams((p) => ({ ...p, matrixSpeed: +e.target.value }))}
+                      className="w-32 accent-blue-500" />
+                    <span className="text-zinc-500 tabular-nums w-8">{params.matrixSpeed.toFixed(2)}</span>
+                  </label>
+                )}
+                {bgMode === 'duotone' && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-16">Shadows</span>
+                      <input type="color" value={params.duotoneShadow}
+                        onChange={(e) => setParams((p) => ({ ...p, duotoneShadow: e.target.value }))}
+                        className="w-9 h-8 rounded cursor-pointer" />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-16">Highlights</span>
+                      <input type="color" value={params.duotoneHighlight}
+                        onChange={(e) => setParams((p) => ({ ...p, duotoneHighlight: e.target.value }))}
                         className="w-9 h-8 rounded cursor-pointer" />
                     </label>
                   </>
