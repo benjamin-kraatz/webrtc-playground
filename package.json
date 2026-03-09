@@ -1,0 +1,13 @@
+{
+  "name": "webrtc-playground",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently -n client,server -c cyan,yellow \"bun run --cwd client dev\" \"bun run --cwd server dev\"",
+    "build": "bun run --cwd client build",
+    "server": "bun run --cwd server dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
