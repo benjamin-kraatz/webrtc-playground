@@ -22,13 +22,13 @@ function HomePage() {
       </div>
       <h1 className="text-3xl font-bold text-zinc-100 mb-3">WebRTC Playground</h1>
       <p className="text-lg text-zinc-400 mb-8">
-        27 interactive demos exploring every corner of the WebRTC API — from your first
-        RTCPeerConnection to ML-powered virtual backgrounds.
+        90 interactive demos exploring every corner of the WebRTC API — from your first
+        RTCPeerConnection to quantum-entangled Bloch spheres.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
         {[
-          { n: '27', label: 'Demos' },
-          { n: '7', label: 'Sections' },
+          { n: '90', label: 'Demos' },
+          { n: '9', label: 'Sections' },
           { n: '0', label: 'Dependencies*' },
           { n: '∞', label: 'Things to learn' },
         ].map(({ n, label }) => (

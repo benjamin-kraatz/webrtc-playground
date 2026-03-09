@@ -136,7 +136,12 @@ export default function EchoChamber() {
 
   const syncPos = useCallback(() => {
     const pos = myPosRef.current;
-    if (pannerRef.current) pannerRef.current.setPosition(pos.x - W / 2, 0, pos.y - H / 2);
+    if (audioCtxRef.current) {
+      audioCtxRef.current.listener.setPosition(
+        (pos.x - W / 2) / 80, 0, (pos.y - H / 2) / 80
+      );
+    }
+    if (pannerRef.current) pannerRef.current.setPosition(0, 0, 0);
     if (dcRef.current?.readyState === 'open') dcRef.current.send(JSON.stringify({ type: 'pos', x: pos.x, y: pos.y, effect: pos.effect }));
   }, []);
 

@@ -157,7 +157,9 @@ export default function BodyPuppetShow() {
     setLoadingModel(true);
     logger.info('Loading MoveNet Lightning model…');
     try {
-      await import('@tensorflow/tfjs');
+      const tf = await import('@tensorflow/tfjs');
+      await tf.setBackend('webgl');
+      await tf.ready();
       const pd = await import('@tensorflow-models/pose-detection');
       const detector = await pd.createDetector(pd.SupportedModels.MoveNet, {
         modelType: (pd.movenet as { modelType: { SINGLEPOSE_LIGHTNING: string } }).modelType.SINGLEPOSE_LIGHTNING,

@@ -236,7 +236,9 @@ export default function FaceFilterParty() {
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
 
       setLoadProgress('Loading TF.js backend…');
-      await import('@tensorflow/tfjs-backend-webgl');
+      const tf = await import('@tensorflow/tfjs');
+      await tf.setBackend('webgl');
+      await tf.ready();
       setLoadProgress('Loading FaceMesh model…');
       const fld = await import('@tensorflow-models/face-landmarks-detection');
       const model = await fld.createDetector(fld.SupportedModels.MediaPipeFaceMesh, {
@@ -248,7 +250,6 @@ export default function FaceFilterParty() {
       logger.success('FaceMesh model loaded');
       setLoadProgress('');
       setStarted(true);
-      rafRef.current = requestAnimationFrame(loop);
     } catch (e) {
       logger.error(`Start failed: ${e}`);
     }
