@@ -51,7 +51,7 @@ export default function WebRTCTheremin() {
   const [volume, setVolume] = useState(0);
   const [waveType, setWaveType] = useState<'sine' | 'sawtooth' | 'square' | 'triangle'>('sine');
   const oscRef = useRef<{ frequency: { rampTo: (v: number, t: number) => void; value: number }; type: string; start(): void } | null>(null);
-  const volRef = useRef<{ volume: { rampTo: (v: number, t: number) => void; value: number }; toDestination: () => { volume: { rampTo: (v: number, t: number) => void } }; chain: (...args: unknown[]) => unknown } | null>(null);
+  const volRef = useRef<{ volume: { rampTo: (v: number, t: number) => void } } | null>(null);
   const destRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const pcARef = useRef<RTCPeerConnection | null>(null);
   const pcBRef = useRef<RTCPeerConnection | null>(null);
@@ -147,14 +147,11 @@ export default function WebRTCTheremin() {
     const osc = new Tone.Oscillator(440, waveType);
     const vol = new Tone.Volume(-20);
     const dest = Tone.context.createMediaStreamDestination();
-    osc.chain(vol, new Tone.Volume(0).toDestination());
-    (osc as unknown as { connect: (n: unknown) => void }).connect({ connect: (n: unknown) => { (vol as unknown as { connect: (n: unknown) => void }).connect(dest); } });
-    // Actually connect directly:
-    const gainNode = Tone.context.createGain();
-    gainNode.gain.value = 0.3;
-    (vol as unknown as { connect: (n: unknown) => void }).connect(dest);
+    osc.chain(vol, dest);
+    vol.toDestination();
     osc.start();
     oscRef.current = osc as unknown as typeof oscRef.current;
+    volRef.current = vol;
     destRef.current = dest;
 
     // WebRTC loopback to stream audio
@@ -189,6 +186,7 @@ export default function WebRTCTheremin() {
     remoteAudioRef.current?.pause();
     pcARef.current?.close(); pcBRef.current?.close();
     oscRef.current = null;
+    volRef.current = null;
     setActive(false); setNote(''); setFreq(0); setVolume(0);
     const canvas = canvasRef.current;
     if (canvas) { const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, W, H); }
@@ -196,7 +194,7 @@ export default function WebRTCTheremin() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!active || !oscRef.current) return;
+    if (!active || !oscRef.current || !volRef.current) return;
     const rect = canvasRef.current!.getBoundingClientRect();
     const xRatio = (e.clientX - rect.left) / rect.width;
     const yRatio = (e.clientY - rect.top) / rect.height;
@@ -204,6 +202,7 @@ export default function WebRTCTheremin() {
     const f = MIN_FREQ * Math.pow(MAX_FREQ / MIN_FREQ, xRatio);
     const db = -60 + (1 - yRatio) * 54;
     oscRef.current.frequency.rampTo(f, 0.04);
+    volRef.current.volume.rampTo(db, 0.04);
     setFreq(f);
     setNote(freqToNote(f));
     setVolume(Math.round((1 - yRatio) * 100));
