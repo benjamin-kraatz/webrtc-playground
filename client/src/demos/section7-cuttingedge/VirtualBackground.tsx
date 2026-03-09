@@ -39,6 +39,11 @@ const MODES = [
   { id: 'invert', label: '🔄 Invert' },
   { id: 'posterize', label: '🎭 Posterize' },
   { id: 'vignette', label: '⭕ Vignette' },
+  { id: 'ripple', label: '🌊 Ripple' },
+  { id: 'glitch', label: '⚡ Glitch' },
+  { id: 'starfield', label: '🌌 Starfield' },
+  { id: 'thermal', label: '🌡️ Thermal' },
+  { id: 'sketch', label: '✏️ Neon Sketch' },
 ] as const;
 
 type BgMode = (typeof MODES)[number]['id'];
@@ -52,6 +57,13 @@ const DEFAULT_PARAMS = {
   posterizeLevel: 4,
   vignetteStrength: 0.8,
   maskThreshold: 0.5,
+  rippleAmp: 12,
+  rippleFreq: 0.04,
+  rippleSpeed: 1.5,
+  glitchIntensity: 0.5,
+  starSpeed: 0.006,
+  sketchThreshold: 40,
+  sketchColor: '#00ffff',
 };
 
 export default function VirtualBackground() {
@@ -153,8 +165,12 @@ export default function VirtualBackground() {
       const pixelateBuffer = document.createElement('canvas');
       const pixelateCtx = pixelateBuffer.getContext('2d')!;
 
+      let animTime = 0;
+      const stars: Array<{ x: number; y: number; z: number; pz: number }> = [];
+
       const render = async () => {
         if (!modelRef.current) return;
+        animTime += 0.05;
         try {
           let cw = video.videoWidth;
           let ch = video.videoHeight;
@@ -213,7 +229,43 @@ export default function VirtualBackground() {
             bgCtx.imageSmoothingEnabled = false;
             bgCtx.drawImage(pixelateBuffer, 0, 0, smallW, smallH, 0, 0, cw, ch);
             bgCtx.imageSmoothingEnabled = true;
-          } else if (mode === 'greyscale' || mode === 'invert' || mode === 'posterize' || mode === 'vignette') {
+          } else if (mode === 'ripple') {
+            bgCtx.save();
+            bgCtx.filter = `blur(${p.blurAmount}px)`;
+            bgCtx.drawImage(video, 0, 0, cw, ch);
+            bgCtx.restore();
+          } else if (mode === 'glitch') {
+            bgCtx.save();
+            bgCtx.filter = 'blur(2px)';
+            bgCtx.drawImage(video, 0, 0, cw, ch);
+            bgCtx.restore();
+          } else if (mode === 'starfield') {
+            bgCtx.fillStyle = '#020209';
+            bgCtx.fillRect(0, 0, cw, ch);
+            if (stars.length === 0) {
+              for (let s = 0; s < 250; s++) {
+                stars.push({ x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2, z: Math.random(), pz: 1 });
+              }
+            }
+            const cx2 = cw / 2, cy2 = ch / 2;
+            for (const star of stars) {
+              star.pz = star.z;
+              star.z -= p.starSpeed;
+              if (star.z <= 0) { star.x = (Math.random() - 0.5) * 2; star.y = (Math.random() - 0.5) * 2; star.z = 1; star.pz = 1; }
+              const sx = (star.x / star.z) * cw + cx2;
+              const sy = (star.y / star.z) * ch + cy2;
+              const px2 = (star.x / star.pz) * cw + cx2;
+              const py2 = (star.y / star.pz) * ch + cy2;
+              if (sx < 0 || sx > cw || sy < 0 || sy > ch) continue;
+              const brightness = 1 - star.z;
+              bgCtx.beginPath();
+              bgCtx.strokeStyle = `rgba(200,220,255,${brightness})`;
+              bgCtx.lineWidth = brightness * 2.5;
+              bgCtx.moveTo(px2, py2);
+              bgCtx.lineTo(sx, sy);
+              bgCtx.stroke();
+            }
+          } else if (mode === 'greyscale' || mode === 'invert' || mode === 'posterize' || mode === 'vignette' || mode === 'thermal' || mode === 'sketch') {
             bgCtx.drawImage(video, 0, 0, cw, ch);
           } else if (mode === 'none') {
             bgCtx.clearRect(0, 0, cw, ch);
@@ -222,8 +274,113 @@ export default function VirtualBackground() {
           const frameData = frameCtx.getImageData(0, 0, cw, ch);
           const output = bgCtx.getImageData(0, 0, cw, ch);
 
-          const applyEffect = (data: ImageData, effect: 'greyscale' | 'invert' | 'posterize' | 'vignette') => {
+          const applyEffect = (data: ImageData, effect: string) => {
             const d = data.data;
+
+            if (effect === 'ripple') {
+              const src = new Uint8ClampedArray(d);
+              const amp = p.rippleAmp;
+              const freq = p.rippleFreq;
+              const t = animTime;
+              for (let ry = 0; ry < ch; ry++) {
+                for (let rx = 0; rx < cw; rx++) {
+                  const dx = Math.round(Math.sin(ry * freq + t * p.rippleSpeed) * amp);
+                  const dy = Math.round(Math.cos(rx * freq * 0.7 + t * p.rippleSpeed * 0.8) * amp);
+                  const sx = Math.max(0, Math.min(cw - 1, rx + dx));
+                  const sy = Math.max(0, Math.min(ch - 1, ry + dy));
+                  const si = (sy * cw + sx) * 4;
+                  const di = (ry * cw + rx) * 4;
+                  d[di] = src[si]; d[di + 1] = src[si + 1]; d[di + 2] = src[si + 2];
+                }
+              }
+              return;
+            }
+
+            if (effect === 'glitch') {
+              const numBands = Math.ceil(p.glitchIntensity * 8);
+              for (let b = 0; b < numBands; b++) {
+                if (Math.random() > p.glitchIntensity) continue;
+                const bandY = Math.floor(Math.random() * ch);
+                const bandH = Math.floor(Math.random() * 24) + 4;
+                const shift = Math.floor((Math.random() * 2 - 1) * 70);
+                for (let row = bandY; row < Math.min(bandY + bandH, ch); row++) {
+                  for (let col = 0; col < cw; col++) {
+                    const srcCol = ((col - shift) % cw + cw) % cw;
+                    const si = (row * cw + srcCol) * 4;
+                    const di = (row * cw + col) * 4;
+                    d[di] = d[si]; d[di + 1] = d[si + 1]; d[di + 2] = d[si + 2];
+                  }
+                }
+              }
+              const rgbShift = Math.ceil(p.glitchIntensity * 10);
+              const src = new Uint8ClampedArray(d);
+              for (let gy = 0; gy < ch; gy++) {
+                for (let gx = 0; gx < cw; gx++) {
+                  const di = (gy * cw + gx) * 4;
+                  const ri = (gy * cw + Math.min(cw - 1, gx + rgbShift)) * 4;
+                  const bi = (gy * cw + Math.max(0, gx - rgbShift)) * 4;
+                  d[di] = src[ri];
+                  d[di + 2] = src[bi + 2];
+                }
+              }
+              return;
+            }
+
+            if (effect === 'thermal') {
+              for (let i = 0; i < d.length; i += 4) {
+                const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                const t = lum / 255;
+                let r, g, b;
+                if (t < 0.25) {
+                  r = 0; g = 0; b = Math.floor(t * 4 * 255);
+                } else if (t < 0.5) {
+                  const s = (t - 0.25) / 0.25;
+                  r = 0; g = Math.floor(s * 255); b = 255;
+                } else if (t < 0.75) {
+                  const s = (t - 0.5) / 0.25;
+                  r = Math.floor(s * 255); g = 255; b = Math.floor((1 - s) * 255);
+                } else {
+                  const s = (t - 0.75) / 0.25;
+                  r = 255; g = 255; b = Math.floor(s * 255);
+                }
+                d[i] = r; d[i + 1] = g; d[i + 2] = b;
+              }
+              return;
+            }
+
+            if (effect === 'sketch') {
+              const src = new Uint8ClampedArray(d);
+              const gray = new Float32Array(cw * ch);
+              for (let i = 0; i < cw * ch; i++) {
+                gray[i] = 0.299 * src[i * 4] + 0.587 * src[i * 4 + 1] + 0.114 * src[i * 4 + 2];
+              }
+              const thresh = p.sketchThreshold;
+              const sc = p.sketchColor;
+              const sr = parseInt(sc.slice(1, 3), 16);
+              const sg = parseInt(sc.slice(3, 5), 16);
+              const sb = parseInt(sc.slice(5, 7), 16);
+              for (let ey = 1; ey < ch - 1; ey++) {
+                for (let ex = 1; ex < cw - 1; ex++) {
+                  const gx =
+                    -gray[(ey - 1) * cw + (ex - 1)] + gray[(ey - 1) * cw + (ex + 1)] +
+                    -2 * gray[ey * cw + (ex - 1)] + 2 * gray[ey * cw + (ex + 1)] +
+                    -gray[(ey + 1) * cw + (ex - 1)] + gray[(ey + 1) * cw + (ex + 1)];
+                  const gy =
+                    -gray[(ey - 1) * cw + (ex - 1)] - 2 * gray[(ey - 1) * cw + ex] - gray[(ey - 1) * cw + (ex + 1)] +
+                    gray[(ey + 1) * cw + (ex - 1)] + 2 * gray[(ey + 1) * cw + ex] + gray[(ey + 1) * cw + (ex + 1)];
+                  const mag = Math.sqrt(gx * gx + gy * gy);
+                  const di = (ey * cw + ex) * 4;
+                  if (mag > thresh) {
+                    const t = Math.min(1, mag / 200);
+                    d[di] = Math.floor(sr * t); d[di + 1] = Math.floor(sg * t); d[di + 2] = Math.floor(sb * t);
+                  } else {
+                    d[di] = 0; d[di + 1] = 0; d[di + 2] = 0;
+                  }
+                }
+              }
+              return;
+            }
+
             const centerX = cw / 2, centerY = ch / 2;
             const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
             for (let i = 0; i < d.length; i += 4) {
@@ -256,6 +413,10 @@ export default function VirtualBackground() {
           else if (mode === 'invert') applyEffect(output, 'invert');
           else if (mode === 'posterize') applyEffect(output, 'posterize');
           else if (mode === 'vignette') applyEffect(output, 'vignette');
+          else if (mode === 'ripple') applyEffect(output, 'ripple');
+          else if (mode === 'glitch') applyEffect(output, 'glitch');
+          else if (mode === 'thermal') applyEffect(output, 'thermal');
+          else if (mode === 'sketch') applyEffect(output, 'sketch');
 
           if (segmentations.length === 0) {
             ctx.putImageData(mode === 'none' ? frameData : output, 0, 0);
@@ -498,6 +659,66 @@ export default function VirtualBackground() {
                       className="w-32 accent-blue-500" />
                     <span className="text-zinc-500 tabular-nums w-10">{params.vignetteStrength.toFixed(1)}</span>
                   </label>
+                )}
+                {bgMode === 'ripple' && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Amplitude</span>
+                      <input type="range" min={2} max={40} value={params.rippleAmp}
+                        onChange={(e) => setParams((p) => ({ ...p, rippleAmp: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.rippleAmp}px</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Speed</span>
+                      <input type="range" min={0.5} max={5} step={0.5} value={params.rippleSpeed}
+                        onChange={(e) => setParams((p) => ({ ...p, rippleSpeed: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.rippleSpeed}×</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Blur base</span>
+                      <input type="range" min={0} max={20} value={params.blurAmount}
+                        onChange={(e) => setParams((p) => ({ ...p, blurAmount: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.blurAmount}px</span>
+                    </label>
+                  </>
+                )}
+                {bgMode === 'glitch' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-24">Intensity</span>
+                    <input type="range" min={0.1} max={1} step={0.05} value={params.glitchIntensity}
+                      onChange={(e) => setParams((p) => ({ ...p, glitchIntensity: +e.target.value }))}
+                      className="w-32 accent-blue-500" />
+                    <span className="text-zinc-500 tabular-nums w-8">{params.glitchIntensity.toFixed(2)}</span>
+                  </label>
+                )}
+                {bgMode === 'starfield' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-400 w-24">Warp speed</span>
+                    <input type="range" min={0.001} max={0.025} step={0.001} value={params.starSpeed}
+                      onChange={(e) => setParams((p) => ({ ...p, starSpeed: +e.target.value }))}
+                      className="w-32 accent-blue-500" />
+                    <span className="text-zinc-500 tabular-nums w-8">{(params.starSpeed * 1000).toFixed(0)}</span>
+                  </label>
+                )}
+                {bgMode === 'sketch' && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-24">Threshold</span>
+                      <input type="range" min={10} max={120} value={params.sketchThreshold}
+                        onChange={(e) => setParams((p) => ({ ...p, sketchThreshold: +e.target.value }))}
+                        className="w-32 accent-blue-500" />
+                      <span className="text-zinc-500 tabular-nums w-8">{params.sketchThreshold}</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-zinc-400 w-16">Glow color</span>
+                      <input type="color" value={params.sketchColor}
+                        onChange={(e) => setParams((p) => ({ ...p, sketchColor: e.target.value }))}
+                        className="w-9 h-8 rounded cursor-pointer" />
+                    </label>
+                  </>
                 )}
                 <label className="flex items-center gap-2 text-sm ml-auto">
                   <span className="text-zinc-400 w-24">Mask sensitivity</span>
