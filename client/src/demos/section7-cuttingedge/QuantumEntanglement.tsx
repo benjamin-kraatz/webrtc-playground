@@ -80,8 +80,12 @@ function buildBlochScene(canvas: HTMLCanvasElement): {
   const poleMat0 = new THREE.MeshBasicMaterial({ color: 0x00ffff });
   const poleMat1 = new THREE.MeshBasicMaterial({ color: 0xff4444 });
   const poleGeo = new THREE.SphereGeometry(0.05, 8, 8);
-  scene.add(Object.assign(new THREE.Mesh(poleGeo, poleMat0), { position: new THREE.Vector3(0, 1.05, 0) }));
-  scene.add(Object.assign(new THREE.Mesh(poleGeo, poleMat1), { position: new THREE.Vector3(0, -1.05, 0) }));
+  const pole0 = new THREE.Mesh(poleGeo, poleMat0);
+  pole0.position.set(0, 1.05, 0);
+  scene.add(pole0);
+  const pole1 = new THREE.Mesh(poleGeo, poleMat1);
+  pole1.position.set(0, -1.05, 0);
+  scene.add(pole1);
 
   // State vector arrow (starts pointing at equator +X)
   const arrow = new THREE.ArrowHelper(

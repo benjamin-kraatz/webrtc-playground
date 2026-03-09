@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "webrtc-playground",
+      "dependencies": {
+        "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+      },
       "devDependencies": {
         "concurrently": "^9.1.2",
       },
