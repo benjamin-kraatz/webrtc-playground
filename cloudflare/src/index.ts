@@ -89,6 +89,7 @@ export class SignalingRoom {
   constructor(state: DurableObjectState) {
     this.state = state;
 
+    // Rebuild room membership from hibernated sockets, so peer state stays derivable from attachments alone.
     for (const socket of this.state.getWebSockets()) {
       const attachment = getAttachment(socket);
       if (attachment.joined) {
@@ -136,12 +137,12 @@ export class SignalingRoom {
     socket.send(JSON.stringify({ type: 'error', message: 'Unknown message type' } satisfies SignalingMessage));
   }
 
-  webSocketClose(socket: WebSocket): void {
-    this.handleDisconnect(socket);
+  webSocketClose(socket: WebSocket, code: number, reason: string, wasClean: boolean): void {
+    this.disconnectPeer(socket, { closeCode: code, closeReason: reason, reciprocateClose: !wasClean });
   }
 
   webSocketError(socket: WebSocket): void {
-    this.handleDisconnect(socket);
+    this.disconnectPeer(socket);
   }
 
   private handleJoin(socket: WebSocket, msg: Extract<SignalingMessage, { type: 'join' }>): void {
@@ -186,13 +187,26 @@ export class SignalingRoom {
     target.socket.send(JSON.stringify({ ...msg, from: attachment.peerId }));
   }
 
-  private handleDisconnect(socket: WebSocket): void {
+  private disconnectPeer(
+    socket: WebSocket,
+    options?: { closeCode?: number; closeReason?: string; reciprocateClose?: boolean }
+  ): void {
     const attachment = getAttachment(socket);
-    if (!attachment.joined) return;
-    if (!this.peers.delete(attachment.peerId)) return;
+    const wasJoined = attachment.joined;
+    const nextAttachment = { ...attachment, joined: false };
+    setAttachment(socket, nextAttachment);
 
-    this.broadcast({ type: 'peer-left', peerId: attachment.peerId } satisfies SignalingMessage, attachment.peerId);
-    setAttachment(socket, { ...attachment, joined: false });
+    if (wasJoined && this.peers.delete(attachment.peerId)) {
+      this.broadcast({ type: 'peer-left', peerId: attachment.peerId } satisfies SignalingMessage, attachment.peerId);
+    }
+
+    if (options?.reciprocateClose) {
+      try {
+        socket.close(options.closeCode, options.closeReason);
+      } catch {
+        // Ignore follow-up close errors after cleanup; the peer has already been removed.
+      }
+    }
   }
 
   private broadcast(message: SignalingMessage, excludePeerId?: string): void {

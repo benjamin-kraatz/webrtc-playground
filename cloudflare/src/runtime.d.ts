@@ -28,6 +28,9 @@ declare const WebSocketPair: {
 };
 
 interface WebSocket {
+  readonly readyState: number;
   serializeAttachment(value: unknown): void;
   deserializeAttachment(): unknown;
+  send(message: string | ArrayBuffer | ArrayBufferView): void;
+  close(code?: number, reason?: string): void;
 }
